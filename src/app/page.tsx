@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import Link from 'next/link'; // Import Link
 import { Invoice, getInvoices, saveInvoice } from '@/services/invoice'; // Import getInvoices
 import { InvoiceForm } from '@/components/invoice-form';
 import { InvoiceTable } from '@/components/invoice-table';
@@ -13,7 +14,7 @@ import { DatePickerWithRange } from '@/components/date-picker-range';
 import type { DateRange } from 'react-day-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ShieldCheck } from "lucide-react"; // Import ShieldCheck for Admin button
 import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 // Remove initial mock data, will fetch from service
@@ -104,8 +105,18 @@ export default function Home() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-8">
-      <header className="text-center">
+    <div className="container mx-auto p-4 md:p-8 space-y-8 relative">
+       {/* Admin Button - Positioned Top Right */}
+      <div className="absolute top-4 right-4 md:top-8 md:right-8">
+        <Link href="/admin" passHref>
+          <Button variant="outline">
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            Admin
+          </Button>
+        </Link>
+      </div>
+
+      <header className="text-center pt-10"> {/* Add padding top to avoid overlap with button */}
         <h1 className="text-3xl font-bold text-primary">InvoicePilot</h1>
         <p className="text-muted-foreground">Streamlining your travel agency's invoice management.</p>
       </header>
@@ -163,3 +174,4 @@ export default function Home() {
     </div>
   );
 }
+
