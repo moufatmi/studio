@@ -127,13 +127,13 @@ export function InvoiceTable({ invoices }: InvoiceTableProps) {
       <TableBody>
         {sortedInvoices.length > 0 ? (
           sortedInvoices.map((invoice, index) => (
-            <TableRow key={index}> {/* Use a more stable key if available, e.g., invoice.id */}
-              <TableCell className="font-medium">{invoice.ticketNumber}</TableCell>
-              <TableCell>{invoice.bookingReference}</TableCell>
-              <TableCell>{invoice.agentId}</TableCell>
-              <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
-              <TableCell>{formatDate(invoice.date)}</TableCell>
-            </TableRow>
+            <TableRow key={index}>{/* Use a more stable key if available, e.g., invoice.id */}
+              <TableCell className="font-medium">{invoice.ticketNumber}</TableCell> 
+              <TableCell>{invoice.bookingReference}</TableCell> 
+              <TableCell>{invoice.agentId}</TableCell> 
+              <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell> 
+              <TableCell>{formatDate(invoice.date)}</TableCell> 
+            </TableRow> 
           ))
         ) : (
           <TableRow>
