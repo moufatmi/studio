@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+// Remove AlertDialog imports as it's moved to the table component
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, AlertCircle, Trash2, Edit, LogOut, Home } from "lucide-react"; // Added LogOut, Home
 import { AdminAuthGuard } from '@/components/admin-auth-guard'; // Import the guard
@@ -26,7 +26,7 @@ function AdminPageContent() {
   const [filter, setFilter] = useState<string>('');
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
-  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+  // Removed deletingInvoiceId state
 
   const { toast } = useToast();
   const { logout } = useAuth(); // Get logout function
@@ -60,20 +60,14 @@ function AdminPageContent() {
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteRequest = (invoiceId: string) => {
-    setDeletingInvoiceId(invoiceId);
-    // The AlertDialog will be triggered by the button click in the table
-  };
-
-  const confirmDelete = async () => {
-    if (!deletingInvoiceId) return;
-
+  // This function is now called AFTER confirmation in the table component
+  const handleDeleteConfirm = async (invoiceId: string) => {
     try {
-      await deleteInvoice(deletingInvoiceId);
-      setInvoices((prevInvoices) => prevInvoices.filter((inv) => inv.id !== deletingInvoiceId));
+      await deleteInvoice(invoiceId);
+      setInvoices((prevInvoices) => prevInvoices.filter((inv) => inv.id !== invoiceId));
       toast({
         title: "Invoice Deleted",
-        description: `Invoice (ID: ${deletingInvoiceId}) has been deleted.`,
+        description: `Invoice (ID: ${invoiceId}) has been deleted.`,
       });
     } catch (err) {
       console.error('Error deleting invoice:', err);
@@ -82,8 +76,6 @@ function AdminPageContent() {
         description: "Could not delete the invoice. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setDeletingInvoiceId(null); // Close the confirmation dialog implicitly
     }
   };
 
@@ -186,7 +178,7 @@ function AdminPageContent() {
             <AdminInvoiceTable
               invoices={filteredInvoices}
               onEdit={handleEdit}
-              onDeleteRequest={handleDeleteRequest}
+              onDeleteConfirm={handleDeleteConfirm} // Pass the confirmation handler
             />
           )}
         </CardContent>
@@ -200,25 +192,7 @@ function AdminPageContent() {
         onSave={handleUpdate}
       />
 
-      {/* Delete Confirmation Dialog (Managed by AlertDialogTrigger in the table) */}
-       <AlertDialog open={!!deletingInvoiceId} onOpenChange={(open) => !open && setDeletingInvoiceId(null)}>
-            {/* Trigger is inside AdminInvoiceTable */}
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the invoice
-                    (ID: {deletingInvoiceId}) and remove its data.
-                </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDeletingInvoiceId(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                    Yes, delete invoice
-                </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+      {/* Delete Confirmation Dialog is now inside AdminInvoiceTable */}
 
     </div>
   );

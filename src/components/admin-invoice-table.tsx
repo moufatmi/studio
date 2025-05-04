@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Import trigger
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Import full AlertDialog components
 import { ArrowUpDown, Edit, Trash2 } from 'lucide-react';
 import type { Invoice } from '@/services/invoice';
 import { cn } from "@/lib/utils"; // For conditional classes
@@ -19,15 +19,16 @@ import { cn } from "@/lib/utils"; // For conditional classes
 interface AdminInvoiceTableProps {
   invoices: Invoice[];
   onEdit: (invoice: Invoice) => void;
-  onDeleteRequest: (invoiceId: string) => void; // Renamed to indicate it requests deletion
+  onDeleteConfirm: (invoiceId: string) => void; // Changed to confirm deletion
 }
 
 type SortKey = keyof Invoice | 'actions'; // Allow sorting by 'actions' (though it won't do anything)
 type SortDirection = 'asc' | 'desc';
 
-export function AdminInvoiceTable({ invoices, onEdit, onDeleteRequest }: AdminInvoiceTableProps) {
+export function AdminInvoiceTable({ invoices, onEdit, onDeleteConfirm }: AdminInvoiceTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null); // State to hold invoice being confirmed for delete
 
   const sortedInvoices = useMemo(() => {
      if (sortKey === 'actions') return invoices; // Don't sort by actions column
@@ -105,84 +106,121 @@ export function AdminInvoiceTable({ invoices, onEdit, onDeleteRequest }: AdminIn
      }
    };
 
+   const handleDeleteRequest = (invoice: Invoice) => {
+       setInvoiceToDelete(invoice);
+   }
+
+   const handleConfirmDeleteAction = () => {
+       if (invoiceToDelete && invoiceToDelete.id) {
+           onDeleteConfirm(invoiceToDelete.id);
+       }
+       setInvoiceToDelete(null); // Close dialog
+   }
+
+   const handleCancelDelete = () => {
+       setInvoiceToDelete(null); // Close dialog
+   }
+
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-           {/* Make table heads clickable buttons for sorting */}
-           <TableHead>
-             <Button variant="ghost" onClick={() => handleSort('ticketNumber')} className="px-0 hover:bg-transparent font-medium">
-               Ticket Number {renderSortIcon('ticketNumber')}
-             </Button>
-           </TableHead>
-           <TableHead>
-             <Button variant="ghost" onClick={() => handleSort('bookingReference')} className="px-0 hover:bg-transparent font-medium">
-               Booking Ref {renderSortIcon('bookingReference')}
-             </Button>
-           </TableHead>
-           <TableHead>
-             <Button variant="ghost" onClick={() => handleSort('agentId')} className="px-0 hover:bg-transparent font-medium">
-               Agent ID {renderSortIcon('agentId')}
-             </Button>
-           </TableHead>
-           <TableHead className="text-right">
-             <Button variant="ghost" onClick={() => handleSort('amount')} className="px-0 hover:bg-transparent font-medium">
-               Amount {renderSortIcon('amount')}
-             </Button>
-           </TableHead>
-           <TableHead>
-             <Button variant="ghost" onClick={() => handleSort('date')} className="px-0 hover:bg-transparent font-medium">
-               Date {renderSortIcon('date')}
-             </Button>
-           </TableHead>
-          <TableHead className="text-right font-medium">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {sortedInvoices.length > 0 ? (
-          sortedInvoices.map((invoice) => (
-            <TableRow key={invoice.id ?? invoice.ticketNumber} data-testid={`invoice-row-${invoice.id}`}>
-              <TableCell className="font-medium">{invoice.ticketNumber}</TableCell>
-              <TableCell>{invoice.bookingReference}</TableCell>
-              <TableCell>{invoice.agentId}</TableCell>
-              <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
-              <TableCell>{formatDate(invoice.date)}</TableCell>
-              <TableCell className="text-right space-x-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onEdit(invoice)}
-                  aria-label={`Edit invoice ${invoice.ticketNumber}`}
-                  data-testid={`edit-button-${invoice.id}`}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                 {/* Wrap Delete button in AlertDialogTrigger */}
-                 <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => invoice.id && onDeleteRequest(invoice.id)}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      aria-label={`Delete invoice ${invoice.ticketNumber}`}
-                      data-testid={`delete-button-${invoice.id}`}
-                      disabled={!invoice.id} // Disable if no ID
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+             {/* Make table heads clickable buttons for sorting */}
+             <TableHead>
+               <Button variant="ghost" onClick={() => handleSort('ticketNumber')} className="px-0 hover:bg-transparent font-medium">
+                 Ticket Number {renderSortIcon('ticketNumber')}
+               </Button>
+             </TableHead>
+             <TableHead>
+               <Button variant="ghost" onClick={() => handleSort('bookingReference')} className="px-0 hover:bg-transparent font-medium">
+                 Booking Ref {renderSortIcon('bookingReference')}
+               </Button>
+             </TableHead>
+             <TableHead>
+               <Button variant="ghost" onClick={() => handleSort('agentId')} className="px-0 hover:bg-transparent font-medium">
+                 Agent ID {renderSortIcon('agentId')}
+               </Button>
+             </TableHead>
+             <TableHead className="text-right">
+               <Button variant="ghost" onClick={() => handleSort('amount')} className="px-0 hover:bg-transparent font-medium">
+                 Amount {renderSortIcon('amount')}
+               </Button>
+             </TableHead>
+             <TableHead>
+               <Button variant="ghost" onClick={() => handleSort('date')} className="px-0 hover:bg-transparent font-medium">
+                 Date {renderSortIcon('date')}
+               </Button>
+             </TableHead>
+            <TableHead className="text-right font-medium">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedInvoices.length > 0 ? (
+            sortedInvoices.map((invoice) => (
+              <TableRow key={invoice.id ?? invoice.ticketNumber} data-testid={`invoice-row-${invoice.id}`}>
+                <TableCell className="font-medium">{invoice.ticketNumber}</TableCell>
+                <TableCell>{invoice.bookingReference}</TableCell>
+                <TableCell>{invoice.agentId}</TableCell>
+                <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
+                <TableCell>{formatDate(invoice.date)}</TableCell>
+                <TableCell className="text-right space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onEdit(invoice)}
+                    aria-label={`Edit invoice ${invoice.ticketNumber}`}
+                    data-testid={`edit-button-${invoice.id}`}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                   {/* AlertDialogTrigger now wraps the delete button */}
+                   <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteRequest(invoice)} // Set the invoice to be deleted
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        aria-label={`Delete invoice ${invoice.ticketNumber}`}
+                        data-testid={`delete-button-${invoice.id}`}
+                        disabled={!invoice.id} // Disable if no ID
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                No invoices found matching your criteria.
               </TableCell>
             </TableRow>
-          ))
-        ) : (
-          <TableRow>
-            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-              No invoices found matching your criteria.
-            </TableCell>
-          </TableRow>
-        )}
-      </TableBody>
-    </Table>
+          )}
+        </TableBody>
+      </Table>
+
+      {/* Delete Confirmation Dialog (Managed within this component) */}
+       <AlertDialog open={!!invoiceToDelete} onOpenChange={(open) => !open && handleCancelDelete()}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the invoice
+                    with Ticket Number: {invoiceToDelete?.ticketNumber} (ID: {invoiceToDelete?.id}) and remove its data.
+                </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConfirmDeleteAction} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                    Yes, delete invoice
+                </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    </>
   );
 }
+
