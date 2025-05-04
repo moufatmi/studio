@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Import full AlertDialog components
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger import
 import { ArrowUpDown, Edit, Trash2 } from 'lucide-react';
 import type { Invoice } from '@/services/invoice';
 import { cn } from "@/lib/utils"; // For conditional classes
@@ -43,17 +43,19 @@ export function AdminInvoiceTable({ invoices, onEdit, onDeleteConfirm }: AdminIn
         return valA - valB;
       }
       if (typeof valA === 'string' && typeof valB === 'string') {
+        // Handle dates specifically
+        if (sortKey === 'date') {
+           try {
+             // Ensure consistent date comparison
+             return new Date(valA).getTime() - new Date(valB).getTime();
+           } catch (e) {
+             return 0; // Fallback if date parsing fails
+           }
+        }
+         // Default string comparison
         return valA.localeCompare(valB);
       }
-      // Handle dates specifically
-      if (sortKey === 'date') {
-         try {
-           // Ensure consistent date comparison
-           return new Date(valA).getTime() - new Date(valB).getTime();
-         } catch (e) {
-           return 0; // Fallback if date parsing fails
-         }
-      }
+
 
       return 0; // Default case if types don't match or aren't comparable
     });
@@ -106,10 +108,12 @@ export function AdminInvoiceTable({ invoices, onEdit, onDeleteConfirm }: AdminIn
      }
    };
 
+   // This function sets the state to open the dialog
    const handleDeleteRequest = (invoice: Invoice) => {
        setInvoiceToDelete(invoice);
    }
 
+   // This function confirms the deletion and closes the dialog
    const handleConfirmDeleteAction = () => {
        if (invoiceToDelete && invoiceToDelete.id) {
            onDeleteConfirm(invoiceToDelete.id);
@@ -117,6 +121,7 @@ export function AdminInvoiceTable({ invoices, onEdit, onDeleteConfirm }: AdminIn
        setInvoiceToDelete(null); // Close dialog
    }
 
+   // This function closes the dialog without deleting
    const handleCancelDelete = () => {
        setInvoiceToDelete(null); // Close dialog
    }
@@ -175,20 +180,20 @@ export function AdminInvoiceTable({ invoices, onEdit, onDeleteConfirm }: AdminIn
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
-                   {/* AlertDialogTrigger now wraps the delete button */}
-                   <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteRequest(invoice)} // Set the invoice to be deleted
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        aria-label={`Delete invoice ${invoice.ticketNumber}`}
-                        data-testid={`delete-button-${invoice.id}`}
-                        disabled={!invoice.id} // Disable if no ID
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
+                   {/* Removed AlertDialogTrigger wrapper */}
+                   {/* The onClick handler now directly triggers the state change to open the dialog */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteRequest(invoice)} // Set the invoice to be deleted, opening the dialog via state
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    aria-label={`Delete invoice ${invoice.ticketNumber}`}
+                    data-testid={`delete-button-${invoice.id}`}
+                    disabled={!invoice.id} // Disable if no ID
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  {/* Removed closing </AlertDialogTrigger> */}
                 </TableCell>
               </TableRow>
             ))
@@ -202,7 +207,7 @@ export function AdminInvoiceTable({ invoices, onEdit, onDeleteConfirm }: AdminIn
         </TableBody>
       </Table>
 
-      {/* Delete Confirmation Dialog (Managed within this component) */}
+      {/* Delete Confirmation Dialog (Remains the same, controlled by invoiceToDelete state) */}
        <AlertDialog open={!!invoiceToDelete} onOpenChange={(open) => !open && handleCancelDelete()}>
             <AlertDialogContent>
                 <AlertDialogHeader>
