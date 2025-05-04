@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -23,6 +24,7 @@ const AlertDialogOverlay = React.forwardRef<
     )}
     {...props}
     ref={ref}
+    data-testid="alert-dialog-overlay"
   />
 ))
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
@@ -40,6 +42,7 @@ const AlertDialogContent = React.forwardRef<
         className
       )}
       {...props}
+      data-testid="alert-dialog-content"
     />
   </AlertDialogPortal>
 ))
@@ -55,6 +58,7 @@ const AlertDialogHeader = ({
       className
     )}
     {...props}
+    data-testid="alert-dialog-header"
   />
 )
 AlertDialogHeader.displayName = "AlertDialogHeader"
@@ -69,6 +73,7 @@ const AlertDialogFooter = ({
       className
     )}
     {...props}
+    data-testid="alert-dialog-footer"
   />
 )
 AlertDialogFooter.displayName = "AlertDialogFooter"
@@ -81,6 +86,7 @@ const AlertDialogTitle = React.forwardRef<
     ref={ref}
     className={cn("text-lg font-semibold", className)}
     {...props}
+    data-testid="alert-dialog-title"
   />
 ))
 AlertDialogTitle.displayName = AlertDialogPrimitive.Title.displayName
@@ -93,6 +99,7 @@ const AlertDialogDescription = React.forwardRef<
     ref={ref}
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
+    data-testid="alert-dialog-description"
   />
 ))
 AlertDialogDescription.displayName =
@@ -104,8 +111,9 @@ const AlertDialogAction = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Action
     ref={ref}
-    className={cn(buttonVariants(), className)}
+    className={cn(buttonVariants(), className)} // Apply default button variants
     {...props}
+    data-testid="alert-dialog-action"
   />
 ))
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName
@@ -117,11 +125,12 @@ const AlertDialogCancel = React.forwardRef<
   <AlertDialogPrimitive.Cancel
     ref={ref}
     className={cn(
-      buttonVariants({ variant: "outline" }),
+      buttonVariants({ variant: "outline" }), // Apply outline variant
       "mt-2 sm:mt-0",
       className
     )}
     {...props}
+    data-testid="alert-dialog-cancel"
   />
 ))
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName

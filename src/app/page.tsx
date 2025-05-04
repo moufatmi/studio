@@ -1,7 +1,8 @@
+
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Invoice } from '@/services/invoice';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Invoice, getInvoices, saveInvoice } from '@/services/invoice'; // Import getInvoices
 import { InvoiceForm } from '@/components/invoice-form';
 import { InvoiceTable } from '@/components/invoice-table';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -13,13 +14,10 @@ import type { DateRange } from 'react-day-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
-// Mock initial invoices data. Replace with API call in useEffect.
-const initialInvoices: Invoice[] = [
-  { ticketNumber: 'T123', bookingReference: 'B456', agentId: 'A001', amount: 150.75, date: '2024-07-01' },
-  { ticketNumber: 'T124', bookingReference: 'B457', agentId: 'A002', amount: 230.00, date: '2024-07-05' },
-  { ticketNumber: 'T125', bookingReference: 'B458', agentId: 'A001', amount: 99.99, date: '2024-07-10' },
-];
+// Remove initial mock data, will fetch from service
+// const initialInvoices: Invoice[] = [ ... ];
 
 export default function Home() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -27,40 +25,75 @@ export default function Home() {
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRange | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast(); // Initialize toast
 
-  // Simulate fetching data on mount
-  useEffect(() => {
-    const fetchData = async () => {
+  // Fetch data using the service function
+   const fetchData = useCallback(async () => {
       setIsLoading(true);
       setError(null);
       try {
-        // Replace with actual API call to fetch invoices
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
-        setInvoices(initialInvoices);
+        const fetchedInvoices = await getInvoices();
+        setInvoices(fetchedInvoices);
       } catch (err) {
         setError('Failed to load invoices. Please try again later.');
         console.error(err);
+        toast({ // Add toast on fetch error
+            title: "Error Loading Invoices",
+            description: "Could not retrieve invoice data. Please refresh.",
+            variant: "destructive",
+        });
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchData();
-  }, []);
+    }, [toast]); // Add toast dependency
 
-  const handleAddInvoice = (newInvoice: Invoice) => {
-    setInvoices((prevInvoices) => [...prevInvoices, newInvoice]);
-  };
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]); // Use fetchData in dependency array
+
+ const handleAddInvoice = useCallback(async (newInvoiceData: Omit<Invoice, 'id'>) => {
+    // No need for setIsSubmitting state here, InvoiceForm handles its own state
+    try {
+      // Call saveInvoice which now returns the saved invoice with an ID
+      const savedInvoice = await saveInvoice(newInvoiceData);
+      setInvoices((prevInvoices) => [...prevInvoices, savedInvoice]); // Add the invoice with ID
+      toast({
+        title: "Invoice Added",
+        description: `Invoice ${savedInvoice.ticketNumber} saved successfully.`,
+      });
+      // The form reset is handled within InvoiceForm itself now
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+       toast({
+         title: "Error Saving Invoice",
+         description: "Failed to save the new invoice. Please try again.",
+         variant: "destructive",
+       });
+    }
+  }, [toast]); // Add toast dependency
+
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
       const agentMatch = agentIdFilter ? invoice.agentId.toLowerCase().includes(agentIdFilter.toLowerCase()) : true;
+
+      // Date filtering logic remains the same
       let dateMatch = true;
-      if (dateRangeFilter?.from) {
-        dateMatch = dateMatch && new Date(invoice.date) >= dateRangeFilter.from;
-      }
-      if (dateRangeFilter?.to) {
-        dateMatch = dateMatch && new Date(invoice.date) <= dateRangeFilter.to;
-      }
+       if (dateRangeFilter?.from) {
+         try {
+           dateMatch = dateMatch && new Date(invoice.date) >= dateRangeFilter.from;
+         } catch (e) { /* Ignore invalid dates for filtering */ }
+       }
+       if (dateRangeFilter?.to) {
+         try {
+           // Adjust 'to' date to include the whole day
+           const toDate = new Date(dateRangeFilter.to);
+           toDate.setHours(23, 59, 59, 999);
+           dateMatch = dateMatch && new Date(invoice.date) <= toDate;
+         } catch (e) { /* Ignore invalid dates for filtering */ }
+       }
+
       return agentMatch && dateMatch;
     });
   }, [invoices, agentIdFilter, dateRangeFilter]);
@@ -77,6 +110,7 @@ export default function Home() {
         <p className="text-muted-foreground">Streamlining your travel agency's invoice management.</p>
       </header>
 
+       {/* Pass the correct handler */}
       <InvoiceForm onAddInvoice={handleAddInvoice} />
 
       <Card>
@@ -121,6 +155,7 @@ export default function Home() {
                <AlertDescription>{error}</AlertDescription>
              </Alert>
           ) : (
+            // Pass invoices (potentially with IDs) to the table
             <InvoiceTable invoices={filteredInvoices} />
           )}
         </CardContent>

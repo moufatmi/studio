@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef } from 'react';
@@ -20,12 +21,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, Upload, Loader2, Wand2 } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns'; // Import parseISO and isValid
 import type { Invoice } from '@/services/invoice';
-import { saveInvoice } from '@/services/invoice'; // Assuming saveInvoice exists and works
+// Assuming saveInvoice exists and works - No need to import it here if parent handles submission
+// import { saveInvoice } from '@/services/invoice';
 import { smartInvoiceReader } from '@/ai/flows/smart-invoice-reader';
 import { useToast } from "@/hooks/use-toast";
 
+// Schema for form validation - no 'id' needed here
 const invoiceFormSchema = z.object({
   ticketNumber: z.string().min(1, { message: 'Ticket number is required' }),
   bookingReference: z.string().min(1, { message: 'Booking reference is required' }),
@@ -37,7 +40,8 @@ const invoiceFormSchema = z.object({
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
 
 interface InvoiceFormProps {
-  onAddInvoice: (invoice: Invoice) => void;
+  // Parent component now handles the async saving and provides the data
+  onAddInvoice: (invoice: Omit<Invoice, 'id'>) => Promise<void>;
 }
 
 export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
@@ -58,40 +62,38 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
     },
   });
 
-  const handleManualSubmit = async (values: InvoiceFormValues) => {
+ const handleManualSubmit = async (values: InvoiceFormValues) => {
     setIsSubmittingManual(true);
     try {
-      const invoiceData: Invoice = {
+      const invoiceData: Omit<Invoice, 'id'> = { // Exclude 'id' when creating
         ...values,
-        date: format(values.date, 'yyyy-MM-dd'),
+        date: format(values.date, 'yyyy-MM-dd'), // Format date to string for saving
       };
-      await saveInvoice(invoiceData); // Call the save function
-      onAddInvoice(invoiceData); // Update the local state
-      toast({
-        title: "Invoice Added",
-        description: `Invoice ${invoiceData.ticketNumber} saved successfully.`,
-      });
-      form.reset(); // Reset form after successful submission
+      await onAddInvoice(invoiceData); // Call the parent's handler
+      // Success toast is handled by the parent now
+      form.reset(); // Reset form after successful submission *handled by parent*
+      setFileName(null); // Clear filename display after successful manual submission
     } catch (error) {
-      console.error('Error saving invoice:', error);
-       toast({
-         title: "Error",
-         description: "Failed to save invoice. Please try again.",
-         variant: "destructive",
-       });
+      console.error('Error submitting invoice data:', error);
+      // Error toast is handled by the parent now
     } finally {
       setIsSubmittingManual(false);
     }
   };
 
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setFileName(file.name);
+      // Don't set filename here yet, wait for extraction start
       handleSmartExtraction(file);
     } else {
       setFileName(null);
     }
+      // Clear the file input value right away so the same file can be selected again
+       if (fileInputRef.current) {
+         fileInputRef.current.value = '';
+       }
   };
 
   const handleSmartExtraction = async (file: File) => {
@@ -113,25 +115,34 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
            form.setValue('bookingReference', extractedData.bookingReference);
            form.setValue('agentId', extractedData.agentId);
            form.setValue('amount', extractedData.amount);
-           // Attempt to parse the date string from AI - needs robust handling
+
+           // More robust date parsing
            try {
-             const parsedDate = new Date(extractedData.date);
-              if (!isNaN(parsedDate.getTime())) {
+              // Attempt to parse the date string (could be various formats)
+              // parseISO is good for ISO 8601 format (like YYYY-MM-DDTHH:mm:ssZ)
+              // new Date() is more flexible but can be inconsistent
+              let parsedDate = parseISO(extractedData.date); // Try ISO first
+              if (!isValid(parsedDate)) {
+                 // If ISO fails, try the more general Date constructor
+                 parsedDate = new Date(extractedData.date);
+              }
+
+              if (isValid(parsedDate)) {
                   form.setValue('date', parsedDate);
               } else {
-                  console.warn("AI returned an invalid date format:", extractedData.date);
+                  console.warn("AI returned an invalid or unparseable date format:", extractedData.date);
                    toast({
-                     title: "Warning",
-                     description: "Could not parse the date from the invoice. Please select manually.",
-                     variant: "default", // Use default variant for warnings
+                     title: "Date Warning",
+                     description: "Could not parse the date from the invoice. Please select it manually.",
+                     variant: "default",
                    });
                    form.setValue('date', undefined); // Clear date if invalid
               }
            } catch (dateError) {
               console.error("Error parsing date:", dateError);
                toast({
-                 title: "Warning",
-                 description: "Error processing the date from the invoice. Please select manually.",
+                 title: "Date Error",
+                 description: "Error processing the date from the invoice. Please select it manually.",
                  variant: "default",
                });
                form.setValue('date', undefined); // Clear date on error
@@ -142,6 +153,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
              title: "Extraction Successful",
              description: "Invoice data extracted. Please review and submit.",
            });
+            // Keep filename displayed after successful extraction
          } catch (aiError) {
            console.error('Error during AI extraction:', aiError);
            toast({
@@ -153,10 +165,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
            setFileName(null); // Clear filename on failure
          } finally {
            setIsExtracting(false);
-           // Clear the file input value so the same file can be selected again if needed
-           if (fileInputRef.current) {
-             fileInputRef.current.value = '';
-           }
+           // File input already cleared in handleFileChange
          }
        };
        reader.onerror = (error) => {
@@ -168,22 +177,18 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
          });
          setIsExtracting(false);
          setFileName(null); // Clear filename on failure
-         if (fileInputRef.current) {
-             fileInputRef.current.value = '';
-         }
+          // File input already cleared in handleFileChange
        };
      } catch (error) {
        console.error('Error setting up file reader:', error);
        toast({
          title: "Error",
-         description: "An unexpected error occurred.",
+         description: "An unexpected error occurred while reading the file.",
          variant: "destructive",
        });
        setIsExtracting(false);
         setFileName(null); // Clear filename on failure
-       if (fileInputRef.current) {
-           fileInputRef.current.value = '';
-       }
+        // File input already cleared in handleFileChange
      }
    };
 
@@ -198,14 +203,13 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
           <CardContent className="space-y-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-4 border rounded-lg bg-secondary/30">
                 <div className='flex-grow'>
-                    <Label htmlFor="invoice-upload" className="text-base font-medium text-primary flex items-center gap-2">
+                    <Label htmlFor="invoice-upload" className="text-base font-medium text-primary flex items-center gap-2 cursor-pointer">
                       <Wand2 className="h-5 w-5" />
                       Smart Invoice Reader
                     </Label>
                     <p className="text-sm text-muted-foreground mt-1">
                       Upload an invoice image or PDF to automatically fill the form.
-                      {fileName && !isExtracting && <span className="ml-2 font-medium text-foreground">Selected: {fileName}</span>}
-                      {isExtracting && <span className="ml-2 font-medium text-foreground flex items-center gap-1"><Loader2 className="animate-spin h-4 w-4"/> Processing: {fileName}</span>}
+                      {fileName && <span className="ml-2 font-medium text-foreground"> ({fileName})</span>}
                     </p>
                 </div>
 
@@ -232,7 +236,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                  id="invoice-upload"
                  ref={fileInputRef}
                  onChange={handleFileChange}
-                 accept="image/*,.pdf"
+                 accept="image/*,.pdf" // Accept images and PDFs
                  className="hidden"
                  disabled={isExtracting}
                />
@@ -247,7 +251,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                   <FormItem>
                     <FormLabel>Ticket Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., TK123456" {...field} disabled={isExtracting}/>
+                      <Input placeholder="e.g., TK123456" {...field} disabled={isExtracting || isSubmittingManual}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -260,7 +264,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                   <FormItem>
                     <FormLabel>Booking Reference</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., BKREF789" {...field} disabled={isExtracting}/>
+                      <Input placeholder="e.g., BKREF789" {...field} disabled={isExtracting || isSubmittingManual}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -273,7 +277,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                   <FormItem>
                     <FormLabel>Agent ID</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., AGENT007" {...field} disabled={isExtracting}/>
+                      <Input placeholder="e.g., AGENT007" {...field} disabled={isExtracting || isSubmittingManual}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -286,7 +290,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                   <FormItem>
                     <FormLabel>Amount</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="e.g., 199.99" {...field} disabled={isExtracting}/>
+                      <Input type="number" step="0.01" placeholder="e.g., 199.99" {...field} disabled={isExtracting || isSubmittingManual}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -307,7 +311,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                               'w-full justify-start text-left font-normal',
                               !field.value && 'text-muted-foreground'
                             )}
-                             disabled={isExtracting}
+                             disabled={isExtracting || isSubmittingManual}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}
@@ -320,7 +324,7 @@ export function InvoiceForm({ onAddInvoice }: InvoiceFormProps) {
                           selected={field.value}
                           onSelect={field.onChange}
                           disabled={(date) =>
-                            date > new Date() || date < new Date('1900-01-01') || isExtracting
+                            date > new Date() || date < new Date('1900-01-01') || isExtracting || isSubmittingManual
                           }
                           initialFocus
                         />
