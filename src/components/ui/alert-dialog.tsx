@@ -111,7 +111,8 @@ const AlertDialogAction = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Action
     ref={ref}
-    className={cn(buttonVariants(), className)} // Apply default button variants
+     // Apply destructive button variant styles
+    className={cn(buttonVariants({ variant: "destructive" }), className)}
     {...props}
     data-testid="alert-dialog-action"
   />

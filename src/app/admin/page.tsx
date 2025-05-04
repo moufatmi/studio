@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { getInvoices, updateInvoice, deleteInvoice, Invoice } from '@/services/invoice';
 import { AdminInvoiceTable } from '@/components/admin-invoice-table';
 import { EditInvoiceDialog } from '@/components/edit-invoice-dialog';
@@ -11,11 +12,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, AlertCircle, Trash2, Edit } from "lucide-react";
+import { PlusCircle, AlertCircle, Trash2, Edit, LogOut, Home } from "lucide-react"; // Added LogOut, Home
+import { AdminAuthGuard } from '@/components/admin-auth-guard'; // Import the guard
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import Link from 'next/link'; // Import Link
 
-export default function AdminPage() {
+function AdminPageContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +29,8 @@ export default function AdminPage() {
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
 
   const { toast } = useToast();
+  const { logout } = useAuth(); // Get logout function
+  const router = useRouter(); // Get router instance
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -106,6 +112,15 @@ export default function AdminPage() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    toast({
+      title: 'Logged Out',
+      description: 'You have been successfully logged out.',
+    });
+    router.push('/login'); // Redirect to login page after logout
+  };
+
   const filteredInvoices = invoices.filter((invoice) => {
     const searchTerm = filter.toLowerCase();
     return (
@@ -119,15 +134,24 @@ export default function AdminPage() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
-      <header className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-primary">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Manage all travel agency invoices.</p>
+      <header className="flex justify-between items-center mb-8">
+        <div className="text-center flex-grow">
+           <h1 className="text-3xl font-bold text-primary">Admin Dashboard</h1>
+           <p className="text-muted-foreground">Manage all travel agency invoices.</p>
+        </div>
+         <div className="flex space-x-2">
+             <Link href="/" passHref>
+               <Button variant="outline">
+                 <Home className="mr-2 h-4 w-4" />
+                 Home
+               </Button>
+             </Link>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
       </header>
-
-       {/* Add New Invoice (Optional for Admin page, could redirect or open modal) */}
-       {/* <Button onClick={() => console.log("Navigate to add page or open modal")}>
-        <PlusCircle className="mr-2" /> Add New Invoice
-       </Button> */}
 
       <Card>
         <CardHeader>
@@ -189,7 +213,7 @@ export default function AdminPage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setDeletingInvoiceId(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmDelete} className={/* Using default destructive styling via theme */ ""}>
+                <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                     Yes, delete invoice
                 </AlertDialogAction>
                 </AlertDialogFooter>
@@ -199,3 +223,14 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+// Export the main component wrapped in the guard
+export default function AdminPage() {
+  return (
+     <AdminAuthGuard>
+        <AdminPageContent />
+      </AdminAuthGuard>
+  );
+}
+

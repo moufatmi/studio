@@ -106,12 +106,12 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 relative">
-       {/* Admin Button - Positioned Top Right */}
+       {/* Admin Button - Positioned Top Right - Links to Login Page */}
       <div className="absolute top-4 right-4 md:top-8 md:right-8">
-        <Link href="/admin" passHref>
+        <Link href="/login" passHref> {/* Updated href to /login */}
           <Button variant="outline">
             <ShieldCheck className="mr-2 h-4 w-4" />
-            Admin
+            Admin Login
           </Button>
         </Link>
       </div>
