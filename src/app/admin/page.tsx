@@ -1,8 +1,9 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import React, { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // Import React Query hooks
 import { getInvoices, updateInvoice, deleteInvoice, Invoice } from '@/services/invoice';
 import { AdminInvoiceTable } from '@/components/admin-invoice-table';
 import { EditInvoiceDialog } from '@/components/edit-invoice-dialog';
@@ -12,96 +13,91 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-// Remove AlertDialog imports as it's moved to the table component
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, AlertCircle, Trash2, Edit, LogOut, Home } from "lucide-react"; // Added LogOut, Home
-import { AdminAuthGuard } from '@/components/admin-auth-guard'; // Import the guard
-import { useAuth } from '@/context/auth-context'; // Import useAuth
-import Link from 'next/link'; // Import Link
+import { PlusCircle, AlertCircle, Trash2, Edit, LogOut, Home } from "lucide-react";
+import { AdminAuthGuard } from '@/components/admin-auth-guard';
+import { useAuth } from '@/context/auth-context';
+import Link from 'next/link';
+
+const ADMIN_INVOICE_QUERY_KEY = 'adminInvoices'; // Define a query key for admin invoices
 
 function AdminPageContent() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  // Removed local state for invoices, isLoading, error - managed by React Query
   const [filter, setFilter] = useState<string>('');
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
-  // Removed deletingInvoiceId state
 
   const { toast } = useToast();
-  const { logout } = useAuth(); // Get logout function
-  const router = useRouter(); // Get router instance
+  const { logout } = useAuth();
+  const router = useRouter();
+  const queryClient = useQueryClient(); // Get query client instance
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await getInvoices();
-      setInvoices(data);
-    } catch (err) {
-      setError('Failed to load invoices. Please try again later.');
-      console.error(err);
-       toast({
-         title: "Error",
-         description: "Failed to load invoices.",
-         variant: "destructive",
-       });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
+  // Fetch data using React Query
+  const { data: invoices = [], isLoading, error: queryError } = useQuery<Invoice[], Error>({
+      queryKey: [ADMIN_INVOICE_QUERY_KEY], // Use a specific key for admin if needed, or reuse 'invoices'
+      queryFn: getInvoices,
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // Mutation for updating an invoice
+  const updateInvoiceMutation = useMutation({
+      mutationFn: updateInvoice,
+      onSuccess: (_, updatedInvoice) => { // First arg is void based on service, second is the input
+          // Invalidate and refetch the invoices query
+          queryClient.invalidateQueries({ queryKey: [ADMIN_INVOICE_QUERY_KEY] });
+          toast({
+              title: "Invoice Updated",
+              description: `Invoice ${updatedInvoice.ticketNumber} updated successfully.`,
+          });
+          setIsEditDialogOpen(false); // Close the dialog on success
+          setEditingInvoice(null);
+      },
+      onError: (error, updatedInvoice) => {
+          console.error('Error updating invoice:', error);
+          toast({
+              title: "Error Updating Invoice",
+              description: "Could not update the invoice. Please try again.",
+              variant: "destructive",
+          });
+          // Keep dialog open on error
+      },
+  });
+
+  // Mutation for deleting an invoice
+  const deleteInvoiceMutation = useMutation({
+      mutationFn: deleteInvoice,
+      onSuccess: (_, invoiceId) => { // First arg is void, second is invoiceId
+          // Invalidate and refetch the invoices query
+          queryClient.invalidateQueries({ queryKey: [ADMIN_INVOICE_QUERY_KEY] });
+          toast({
+              title: "Invoice Deleted",
+              description: `Invoice (ID: ${invoiceId}) has been deleted.`,
+          });
+      },
+      onError: (error, invoiceId) => {
+          console.error('Error deleting invoice:', error);
+          toast({
+              title: "Error Deleting Invoice",
+              description: "Could not delete the invoice. Please try again.",
+              variant: "destructive",
+          });
+      },
+  });
+
 
   const handleEdit = (invoice: Invoice) => {
     setEditingInvoice(invoice);
     setIsEditDialogOpen(true);
   };
 
-  // This function is now called AFTER confirmation in the table component
+  // Trigger the delete mutation
   const handleDeleteConfirm = async (invoiceId: string) => {
-    try {
-      await deleteInvoice(invoiceId);
-      setInvoices((prevInvoices) => prevInvoices.filter((inv) => inv.id !== invoiceId));
-      toast({
-        title: "Invoice Deleted",
-        description: `Invoice (ID: ${invoiceId}) has been deleted.`,
-      });
-    } catch (err) {
-      console.error('Error deleting invoice:', err);
-      toast({
-        title: "Error Deleting Invoice",
-        description: "Could not delete the invoice. Please try again.",
-        variant: "destructive",
-      });
-    }
+    deleteInvoiceMutation.mutate(invoiceId);
   };
 
+  // Trigger the update mutation
   const handleUpdate = async (updatedInvoice: Invoice) => {
-    if (!updatedInvoice.id) return; // Should have ID for update
-
-    try {
-      await updateInvoice(updatedInvoice);
-      setInvoices((prevInvoices) =>
-        prevInvoices.map((inv) => (inv.id === updatedInvoice.id ? updatedInvoice : inv))
-      );
-      toast({
-        title: "Invoice Updated",
-        description: `Invoice ${updatedInvoice.ticketNumber} updated successfully.`,
-      });
-      setIsEditDialogOpen(false); // Close the dialog on success
-      setEditingInvoice(null);
-    } catch (error) {
-      console.error('Error updating invoice:', error);
-      toast({
-        title: "Error Updating Invoice",
-        description: "Could not update the invoice. Please try again.",
-        variant: "destructive",
-      });
-      // Keep dialog open on error
-    }
+    if (!updatedInvoice.id) return;
+    updateInvoiceMutation.mutate(updatedInvoice);
   };
 
   const handleLogout = () => {
@@ -110,19 +106,21 @@ function AdminPageContent() {
       title: 'Logged Out',
       description: 'You have been successfully logged out.',
     });
-    router.push('/login'); // Redirect to login page after logout
+    router.push('/login');
   };
 
-  const filteredInvoices = invoices.filter((invoice) => {
-    const searchTerm = filter.toLowerCase();
-    return (
-      invoice.ticketNumber.toLowerCase().includes(searchTerm) ||
-      invoice.bookingReference.toLowerCase().includes(searchTerm) ||
-      invoice.agentId.toLowerCase().includes(searchTerm) ||
-      invoice.amount.toString().includes(searchTerm) ||
-      invoice.date.includes(searchTerm)
-    );
-  });
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const searchTerm = filter.toLowerCase();
+      return (
+        invoice.ticketNumber.toLowerCase().includes(searchTerm) ||
+        invoice.bookingReference.toLowerCase().includes(searchTerm) ||
+        invoice.agentId.toLowerCase().includes(searchTerm) ||
+        invoice.amount.toString().includes(searchTerm) ||
+        invoice.date.includes(searchTerm)
+      );
+    });
+  }, [invoices, filter]);
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
@@ -161,38 +159,36 @@ function AdminPageContent() {
             />
           </div>
 
-          {isLoading ? (
+          {isLoading ? ( // Use isLoading from React Query
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
-          ) : error ? (
+          ) : queryError ? ( // Use error from React Query
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error Loading Data</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{queryError.message || 'Failed to load invoices.'}</AlertDescription>
             </Alert>
           ) : (
             <AdminInvoiceTable
               invoices={filteredInvoices}
               onEdit={handleEdit}
-              onDeleteConfirm={handleDeleteConfirm} // Pass the confirmation handler
+              onDeleteConfirm={handleDeleteConfirm}
             />
           )}
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog - Pass the handleUpdate mutation trigger */}
       <EditInvoiceDialog
         isOpen={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         invoice={editingInvoice}
-        onSave={handleUpdate}
+        onSave={handleUpdate} // Pass the mutation trigger function
       />
-
-      {/* Delete Confirmation Dialog is now inside AdminInvoiceTable */}
 
     </div>
   );
@@ -207,4 +203,3 @@ export default function AdminPage() {
       </AdminAuthGuard>
   );
 }
-

@@ -1,9 +1,10 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import Link from 'next/link'; // Import Link
-import { Invoice, getInvoices, saveInvoice } from '@/services/invoice'; // Import getInvoices
+import React, { useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // Import React Query hooks
+import { Invoice, getInvoices, saveInvoice } from '@/services/invoice';
 import { InvoiceForm } from '@/components/invoice-form';
 import { InvoiceTable } from '@/components/invoice-table';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -14,86 +15,75 @@ import { DatePickerWithRange } from '@/components/date-picker-range';
 import type { DateRange } from 'react-day-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ShieldCheck } from "lucide-react"; // Import ShieldCheck for Admin button
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { AlertCircle, ShieldCheck } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-// Remove initial mock data, will fetch from service
-// const initialInvoices: Invoice[] = [ ... ];
+const INVOICE_QUERY_KEY = 'invoices'; // Define a query key for invoices
 
 export default function Home() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  // Removed local state for invoices, isLoading, error - managed by React Query
   const [agentIdFilter, setAgentIdFilter] = useState<string>('');
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRange | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast();
+  const queryClient = useQueryClient(); // Get query client instance
 
-  // Fetch data using the service function
-   const fetchData = useCallback(async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const fetchedInvoices = await getInvoices();
-        setInvoices(fetchedInvoices);
-      } catch (err) {
-        setError('Failed to load invoices. Please try again later.');
-        console.error(err);
-        toast({ // Add toast on fetch error
-            title: "Error Loading Invoices",
-            description: "Could not retrieve invoice data. Please refresh.",
-            variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+  // Fetch data using React Query
+  const { data: invoices = [], isLoading, error: queryError } = useQuery<Invoice[], Error>({
+      queryKey: [INVOICE_QUERY_KEY],
+      queryFn: getInvoices, // Use the service function directly
+  });
+
+  // Mutation for adding an invoice
+  const addInvoiceMutation = useMutation({
+      mutationFn: saveInvoice,
+      onSuccess: (savedInvoice) => {
+          // Invalidate and refetch the invoices query to show the new data
+          queryClient.invalidateQueries({ queryKey: [INVOICE_QUERY_KEY] });
+          toast({
+            title: "Invoice Added",
+            description: `Invoice ${savedInvoice.ticketNumber} saved successfully.`,
+          });
+          // Form reset is handled within InvoiceForm
+      },
+      onError: (error) => {
+           console.error('Error saving invoice:', error);
+           toast({
+             title: "Error Saving Invoice",
+             description: "Failed to save the new invoice. Please try again.",
+             variant: "destructive",
+           });
       }
-    }, [toast]); // Add toast dependency
+  });
 
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]); // Use fetchData in dependency array
-
- const handleAddInvoice = useCallback(async (newInvoiceData: Omit<Invoice, 'id'>) => {
-    // No need for setIsSubmitting state here, InvoiceForm handles its own state
-    try {
-      // Call saveInvoice which now returns the saved invoice with an ID
-      const savedInvoice = await saveInvoice(newInvoiceData);
-      setInvoices((prevInvoices) => [...prevInvoices, savedInvoice]); // Add the invoice with ID
-      toast({
-        title: "Invoice Added",
-        description: `Invoice ${savedInvoice.ticketNumber} saved successfully.`,
-      });
-      // The form reset is handled within InvoiceForm itself now
-    } catch (error) {
-      console.error('Error saving invoice:', error);
-       toast({
-         title: "Error Saving Invoice",
-         description: "Failed to save the new invoice. Please try again.",
-         variant: "destructive",
-       });
-    }
-  }, [toast]); // Add toast dependency
+  // Use the mutation in the handler
+  const handleAddInvoice = useCallback(async (newInvoiceData: Omit<Invoice, 'id'>) => {
+      addInvoiceMutation.mutate(newInvoiceData);
+  }, [addInvoiceMutation]);
 
 
   const filteredInvoices = useMemo(() => {
+    // Filter logic remains the same, using data from React Query
     return invoices.filter((invoice) => {
       const agentMatch = agentIdFilter ? invoice.agentId.toLowerCase().includes(agentIdFilter.toLowerCase()) : true;
 
-      // Date filtering logic remains the same
       let dateMatch = true;
-       if (dateRangeFilter?.from) {
-         try {
-           dateMatch = dateMatch && new Date(invoice.date) >= dateRangeFilter.from;
-         } catch (e) { /* Ignore invalid dates for filtering */ }
-       }
-       if (dateRangeFilter?.to) {
-         try {
-           // Adjust 'to' date to include the whole day
-           const toDate = new Date(dateRangeFilter.to);
-           toDate.setHours(23, 59, 59, 999);
-           dateMatch = dateMatch && new Date(invoice.date) <= toDate;
-         } catch (e) { /* Ignore invalid dates for filtering */ }
-       }
+      if (dateRangeFilter?.from) {
+        try {
+          // Assuming invoice.date is 'YYYY-MM-DD'
+          // Create date objects at midnight UTC to avoid timezone issues in comparison
+          const fromDate = new Date(dateRangeFilter.from.setUTCHours(0, 0, 0, 0));
+          const invoiceDate = new Date(new Date(invoice.date).setUTCHours(0, 0, 0, 0));
+          dateMatch = dateMatch && invoiceDate >= fromDate;
+        } catch (e) { /* Ignore invalid dates */ }
+      }
+      if (dateRangeFilter?.to) {
+        try {
+          const toDate = new Date(dateRangeFilter.to.setUTCHours(23, 59, 59, 999)); // Include whole 'to' day
+          const invoiceDate = new Date(new Date(invoice.date).setUTCHours(0, 0, 0, 0));
+          dateMatch = dateMatch && invoiceDate <= toDate;
+        } catch (e) { /* Ignore invalid dates */ }
+      }
 
       return agentMatch && dateMatch;
     });
@@ -106,9 +96,8 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 relative">
-       {/* Admin Button - Positioned Top Right - Links to Login Page */}
-      <div className="absolute top-4 right-4 md:top-8 md:right-8">
-        <Link href="/login" passHref> {/* Updated href to /login */}
+       <div className="absolute top-4 right-4 md:top-8 md:right-8">
+        <Link href="/login" passHref>
           <Button variant="outline">
             <ShieldCheck className="mr-2 h-4 w-4" />
             Admin Login
@@ -116,12 +105,12 @@ export default function Home() {
         </Link>
       </div>
 
-      <header className="text-center pt-10"> {/* Add padding top to avoid overlap with button */}
+      <header className="text-center pt-10">
         <h1 className="text-3xl font-bold text-primary">InvoicePilot</h1>
         <p className="text-muted-foreground">Streamlining your travel agency's invoice management.</p>
       </header>
 
-       {/* Pass the correct handler */}
+      {/* Pass the correct handler, form handles its own loading state */}
       <InvoiceForm onAddInvoice={handleAddInvoice} />
 
       <Card>
@@ -153,20 +142,20 @@ export default function Home() {
               </Button>
           </div>
 
-          {isLoading ? (
+          {isLoading ? ( // Use isLoading from React Query
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
-          ) : error ? (
+          ) : queryError ? ( // Use error from React Query
              <Alert variant="destructive">
                <AlertCircle className="h-4 w-4" />
                <AlertTitle>Error</AlertTitle>
-               <AlertDescription>{error}</AlertDescription>
+               {/* Display the actual error message */}
+               <AlertDescription>{queryError.message || 'Failed to load invoices.'}</AlertDescription>
              </Alert>
           ) : (
-            // Pass invoices (potentially with IDs) to the table
             <InvoiceTable invoices={filteredInvoices} />
           )}
         </CardContent>
