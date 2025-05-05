@@ -16,14 +16,11 @@ const requiredEnvVars = [
 
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-if (missingEnvVars.length > 0) {
-  console.warn(
-    `Firebase configuration is incomplete. Missing environment variables: ${missingEnvVars.join(', ')}. ` +
-    `Please create a .env.local file in the root of your project and add these values. ` +
-    `You can find these values in your Firebase project settings.`
-  );
-  // You might want to throw an error or handle this case differently depending on your app's needs.
-  // For now, we'll proceed but Firestore operations will likely fail.
+if (missingEnvVars.length) {
+  const errorMessage = `Firebase configuration is incomplete. Missing environment variables: ${missingEnvVars.join(', ')}. ` +
+  `Please create a .env.local file in the root of your project and add these values. ` +
+  `You can find these values in your Firebase project settings.`;
+  throw new Error(errorMessage);
 }
 
 // Your web app's Firebase configuration using environment variables
@@ -46,13 +43,6 @@ let db: ReturnType<typeof getFirestore>;
 if (missingEnvVars.length === 0) {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   db = getFirestore(app);
-} else {
-  // Provide a dummy db object or handle the error appropriately
-  // This prevents errors during build or initial load if config is missing
-  console.error("Firebase not initialized due to missing configuration.");
-  // Assigning a placeholder or null might be necessary depending on how db is used elsewhere
-  // For simplicity, we'll leave db potentially undefined, but guard usage elsewhere.
-  // db = {} as ReturnType<typeof getFirestore>; // Example placeholder
 }
 
 
